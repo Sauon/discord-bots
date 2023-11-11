@@ -2059,7 +2059,7 @@ limit 10"""
                 .all()
 
             for i, player in enumerate(top_10_players, 1):
-                output += f"\n{i}. {round(player.leaderboard_trueskill, 1)} - {player.name}"
+                output += f"\n{i}. {round(player.leaderboard_trueskill, 1)} - {escape_markdown(player.name)}"
                 if config.SHOW_TRUESKILL_DETAILS:
                     output += f" _(mu: {round(player.rated_trueskill_mu, 1)}, sigma: {round(player.rated_trueskill_sigma, 1)})_"
             output += "\n(Ranks calculated using the formula: _mu - 3*sigma_)"
