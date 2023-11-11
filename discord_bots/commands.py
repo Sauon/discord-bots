@@ -1992,23 +1992,20 @@ async def leaderboard(ctx: Context, *args):
                 output += f"\n_{queue_region.name}_"
 
                 leaderboard_prt_native_query = f"""
-                        select
-                            p.id as player_id,
-                            (prt.rated_trueskill_mu - 3 * prt.rated_trueskill_sigma)::numeric as rating
-                        from player_region_trueskill prt
-                        join player p on p.id = prt.player_id
-                        INNER JOIN (
-                            select fgp.player_id, MAX(fg.finished_at) AS last_played
-                            from finished_game fg
-                            join finished_game_player fgp on fg.id = fgp.finished_game_id
-                            WHERE fg.started_at > NOW() - INTERVAL '{config.DAYS_UNTIL_INACTIVE} DAYS'
-                            group by fgp.player_id
-                        ) as last_played ON p.id = last_played.player_id
-                        where queue_region_id = '{queue_region.id}'
-                        AND   last_played.last_played > NOW() - INTERVAL '{config.DAYS_UNTIL_INACTIVE} DAYS'
-                        order by rating desc
-                        limit 10
-                        """
+with has_played as (select fgp.player_id, MAX(fg.finished_at) AS last_played
+                     from finished_game fg
+                              join finished_game_player fgp on fg.id = fgp.finished_game_id
+                     where fg.started_at > NOW() - INTERVAL '{config.DAYS_UNTIL_INACTIVE} DAYS'
+                       and fg.queue_region_name = '{queue_region.name}'
+                     group by fgp.player_id)
+select p.id                                                              as player_id,
+       (prt.rated_trueskill_mu - 3 * prt.rated_trueskill_sigma)::numeric as rating
+from player_region_trueskill prt
+         join player p on p.id = prt.player_id
+         join has_played ON p.id = has_played.player_id
+where queue_region_id = '{queue_region.id}'
+order by rating desc
+limit 10"""
                 leaderboard_ids = []
                 rs = session.execute(leaderboard_prt_native_query)
                 for row in rs:
@@ -2038,21 +2035,19 @@ async def leaderboard(ctx: Context, *args):
             output = "**Leaderboard**\nranked"
 
             leaderboard_player_native_query = f"""
-                                    select
-                                        p.id as player_id,
-                                        (p.rated_trueskill_mu - 3 * p.rated_trueskill_sigma)::numeric as rating
-                                    from player p
-                                    INNER JOIN (
-                                        select fgp.player_id, MAX(fg.finished_at) AS last_played
-                                        from finished_game fg
-                                        join finished_game_player fgp on fg.id = fgp.finished_game_id
-                                        WHERE fg.started_at > NOW() - INTERVAL '{config.DAYS_UNTIL_INACTIVE} DAYS'
-                                        group by fgp.player_id
-                                    ) as last_played ON p.id = last_played.player_id
-                                    AND   last_played.last_played > NOW() - INTERVAL '{config.DAYS_UNTIL_INACTIVE} DAYS'
-                                    order by rating desc
-                                    limit 10
-                                    """
+with has_played as (select fgp.player_id, MAX(fg.finished_at) AS last_played
+                     from finished_game fg
+                              join finished_game_player fgp on fg.id = fgp.finished_game_id
+                     WHERE fg.started_at > NOW() - INTERVAL '{config.DAYS_UNTIL_INACTIVE} DAYS'
+                       and (fg.queue_region_name is null or fg.queue_region_name like '')
+                     group by fgp.player_id)
+
+select p.id                                                          as player_id,
+       (p.rated_trueskill_mu - 3 * p.rated_trueskill_sigma)::numeric as rating
+from player p
+         join has_played ON p.id = has_played.player_id
+order by rating desc
+limit 10"""
             leaderboard_ids = []
             rs = session.execute(leaderboard_player_native_query)
             for row in rs:
